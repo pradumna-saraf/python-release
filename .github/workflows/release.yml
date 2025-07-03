@@ -39,24 +39,26 @@ jobs:
           name: ${{ steps.changelog.outputs.tag }}
           body: ${{ steps.changelog.outputs.clean_changelog }}
 
-  build-and-push:
-    name: Build and Push Docker Image
+  publish-to-pypi:
+    name: Publish to PyPI
     needs: create-release
     if: needs.create-release.outputs.release_created == 'true'
+    environment: pypi
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.13
+      - name: Install uv and set up the Python version
+        uses: astral-sh/setup-uv@v5
 
-      - name: Print release_created
-        run: |
-          echo "Release created: ${{ needs.create-release.outputs.release_created }}"
+      - name: Install the project
+        run: uv sync --all-groups
 
-      - name: Print tag
-        run: |
-          echo "Tag: ${{ needs.create-release.outputs.tag }}"
+      - name: Build wheel
+        run: uv build
+
+      - name: Publish package
+        run: uv publish
