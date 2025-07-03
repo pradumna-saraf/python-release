@@ -1,33 +1,62 @@
-name: Create Release
+name: Release and Build Docker Image
+
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   create-release:
-    name: Creating Tag and Release
+    name: Create Tag and Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      release_created: ${{ steps.changelog.outputs.skipped != 'true' }}
+      tag: ${{ steps.changelog.outputs.tag }}
+
     steps:
       - name: Checkout the repo
         uses: actions/checkout@v4
 
-      - name: Creating Tag
+      - name: Generate Tag and Changelog
         id: changelog
         uses: TriPSs/conventional-changelog-action@v6
         with:
-          github-token: ${{ secrets.github_token }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           output-file: 'false'
           create-summary: 'true'
           version-file: './pyproject.toml'
           version-path: 'project.version'
-      - name: Create Release
+
+      - name: Create GitHub Release
         if: steps.changelog.outputs.skipped == 'false'
         uses: ncipollo/release-action@v1
         with:
-          token: ${{ secrets.github_token }}
-          tag	: ${{ steps.changelog.outputs.tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.changelog.outputs.tag }}
           name: ${{ steps.changelog.outputs.tag }}
           body: ${{ steps.changelog.outputs.clean_changelog }}
+
+  build-and-push:
+    name: Build and Push Docker Image
+    needs: create-release
+    if: needs.create-release.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.13
+
+      - name: Print release_created
+        run: |
+          echo "Release created: ${{ needs.create-release.outputs.release_created }}"
+
+      - name: Print tag
+        run: |
+          echo "Tag: ${{ needs.create-release.outputs.tag }}"
